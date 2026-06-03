@@ -20,6 +20,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import rikka.shizuku.Shizuku;
 import rikka.shizuku.ShizukuBinderWrapper;
+import rikka.shizuku.UserServiceArgs;
 
 public class DashboardActivity extends AppCompatActivity {
 
@@ -67,13 +68,11 @@ public class DashboardActivity extends AppCompatActivity {
         startStopBtn = findViewById(R.id.startStopBtn);
         logoutBtn = findViewById(R.id.logoutBtn);
         
-        // Set device info
         deviceInfo.setText("Model: " + Build.MODEL + "\n" +
                           "Manufacturer: " + Build.MANUFACTURER + "\n" +
                           "Android: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\n" +
                           "Brand: " + Build.BRAND);
         
-        // Set token preview
         String preview = jwtToken.length() > 40 ? jwtToken.substring(0, 40) + "..." : jwtToken;
         tokenPreview.setText(preview);
         
@@ -96,9 +95,12 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void bindShizukuService() {
         try {
-            Intent intent = new Intent();
-            intent.setComponent(new ComponentName("com.acproxy", "com.acproxy.FileService"));
-            Shizuku.bindUserService(intent, new ServiceConnection() {
+            // FIXED: Use UserServiceArgs instead of Intent
+            UserServiceArgs args = new UserServiceArgs(
+                new ComponentName("com.acproxy", "com.acproxy.FileService")
+            );
+            
+            Shizuku.bindUserService(args, new ServiceConnection() {
                 @Override
                 public void onServiceConnected(ComponentName name, IBinder service) {
                     fileService = IFileService.Stub.asInterface(new ShizukuBinderWrapper(service));
