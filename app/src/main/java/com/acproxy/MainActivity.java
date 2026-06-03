@@ -22,7 +22,6 @@ import org.json.JSONObject;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import rikka.shizuku.Shizuku;
-import rikka.shizuku.ShizukuBinderWrapper;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -36,13 +35,11 @@ public class MainActivity extends AppCompatActivity {
     private TextView errorText;
     private TextView createAccountBtn;
     
-    private IFileService fileService;
     private boolean shizukuReady = false;
     private String jwtToken = "";
     private ExecutorService executor;
     private Handler handler;
     private SharedPreferences prefs;
-    private ServiceConnection serviceConnection;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -93,29 +90,9 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             
-            // Unbind previous
-            if (serviceConnection != null) {
-                try { Shizuku.unbindUserService(serviceConnection, true); } catch (Exception e) {}
-            }
-            
-            serviceConnection = new ServiceConnection() {
-                @Override
-                public void onServiceConnected(ComponentName name, IBinder service) {
-                    fileService = IFileService.Stub.asInterface(new ShizukuBinderWrapper(service));
-                    shizukuReady = true;
-                    handler.post(() -> unlockApp());
-                }
-                @Override
-                public void onServiceDisconnected(ComponentName name) {
-                    fileService = null;
-                    shizukuReady = false;
-                }
-            };
-            
-            // Use Intent method (old API)
-            Intent serviceIntent = new Intent();
-            serviceIntent.setComponent(new ComponentName("com.acproxy", "com.acproxy.FileService"));
-            Shizuku.bindUserService(serviceIntent, serviceConnection);
+            // Shizuku ready - unlock
+            shizukuReady = true;
+            unlockApp();
             
         } catch (Exception e) {
             updateLockUI("Error", e.getMessage());
@@ -196,8 +173,5 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         executor.shutdown();
-        if (serviceConnection != null) {
-            try { Shizuku.unbindUserService(serviceConnection, true); } catch (Exception e) {}
-        }
     }
-                                                           }
+}
