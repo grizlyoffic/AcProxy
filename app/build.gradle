@@ -19,6 +19,18 @@ android {
         }
     }
     
+    // 👇 YEH VALA BLOCK ADD KIYA HAI AIDL ENABLE KARNE KE LIYE
+    buildFeatures {
+        aidl true
+    }
+
+    // 👇 YEH VALA BLOCK ADD KIYA HAI AIDL FOLDER KA PATH BATANE KE LIYE
+    sourceSets {
+        main {
+            aidl.srcDirs = ['src/main/aidl']
+        }
+    }
+    
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
