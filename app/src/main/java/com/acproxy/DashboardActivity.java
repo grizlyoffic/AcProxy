@@ -40,12 +40,28 @@ public class DashboardActivity extends AppCompatActivity {
     
     private static final String CONFIG_PATH = "/storage/emulated/0/Android/data/com.dts.freefireth/files/localconfig.json";
 
-    private final Shizuku.OnBinderDeadListener binderDeadListener = () -> {
-        runOnUiThread(() -> updateShizukuStatus(false));
+    private final Shizuku.OnBinderReceivedListener binderReceivedListener = new Shizuku.OnBinderReceivedListener() {
+        @Override
+        public void onBinderReceived() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    updateShizukuStatus(true);
+                }
+            });
+        }
     };
 
-    private final Shizuku.OnBinderReceivedListener binderReceivedListener = () -> {
-        runOnUiThread(() -> updateShizukuStatus(true));
+    private final Shizuku.OnBinderDeadListener binderDeadListener = new Shizuku.OnBinderDeadListener() {
+        @Override
+        public void onBinderDead() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    updateShizukuStatus(false);
+                }
+            });
+        }
     };
 
     @Override
@@ -74,31 +90,37 @@ public class DashboardActivity extends AppCompatActivity {
         startStopBtn = findViewById(R.id.startStopBtn);
         logoutBtn = findViewById(R.id.logoutBtn);
         
-        deviceInfo.setText("📱 Model: " + Build.MODEL + "\n" +
-                          "🏭 Manufacturer: " + Build.MANUFACTURER + "\n" +
-                          "🤖 Android: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\n" +
-                          "🏷 Brand: " + Build.BRAND);
+        deviceInfo.setText("Model: " + Build.MODEL + "\n" +
+                          "Manufacturer: " + Build.MANUFACTURER + "\n" +
+                          "Android: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\n" +
+                          "Brand: " + Build.BRAND);
         
         String preview = jwtToken.length() > 35 ? jwtToken.substring(0, 35) + "..." : jwtToken;
         tokenPreview.setText(preview);
         
-        startStopBtn.setOnClickListener(v -> {
-            if (!Shizuku.pingBinder() || 
-                Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "❌ Shizuku not connected!", Toast.LENGTH_SHORT).show();
-                return;
+        startStopBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (!Shizuku.pingBinder() || 
+                    Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                    Toast.makeText(DashboardActivity.this, "Shizuku not connected!", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (isActive) stopProxy();
+                else startProxy();
             }
-            if (isActive) stopProxy();
-            else startProxy();
         });
         
-        logoutBtn.setOnClickListener(v -> {
-            prefs.edit().clear().apply();
-            if (isActive) stopProxy();
-            Intent intent = new Intent(this, MainActivity.class);
-            intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-            finish();
+        logoutBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                prefs.edit().clear().apply();
+                if (isActive) stopProxy();
+                Intent intent = new Intent(DashboardActivity.this, MainActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+                finish();
+            }
         });
     }
 
@@ -111,90 +133,110 @@ public class DashboardActivity extends AppCompatActivity {
         if (isDestroyed) return;
         
         if (connected && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
-            shizukuStatus.setText("✅ Shizuku Connected");
+            shizukuStatus.setText("Shizuku: Connected");
             shizukuStatus.setTextColor(Color.parseColor("#00E676"));
         } else if (connected) {
-            shizukuStatus.setText("⚠️ Shizuku - Permission Needed");
+            shizukuStatus.setText("Shizuku: Permission Needed");
             shizukuStatus.setTextColor(Color.parseColor("#FFD740"));
         } else {
-            shizukuStatus.setText("❌ Shizuku Disconnected");
+            shizukuStatus.setText("Shizuku: Disconnected");
             shizukuStatus.setTextColor(Color.parseColor("#FF5252"));
         }
     }
 
     private void startProxy() {
         startStopBtn.setEnabled(false);
-        startStopBtn.setText("⏳ Creating...");
+        startStopBtn.setText("Creating...");
         
-        executor.execute(() -> {
-            try {
-                String serverUrl = "http://203.175.125.151:10136/" + jwtToken + "/";
-                
-                JSONObject config = new JSONObject();
-                config.put("verAddr", "https://version-ggbluellama.vercel.app/live/");
-                config.put("serverLoginUrl", serverUrl);
-                
-                File file = new File(CONFIG_PATH);
-                File parent = file.getParentFile();
-                if (parent != null && !parent.exists()) parent.mkdirs();
-                if (file.exists()) file.delete();
-                file.createNewFile();
-                
-                FileWriter fw = new FileWriter(file);
-                fw.write(config.toString(2));
-                fw.flush();
-                fw.close();
-                
-                boolean ok = file.exists() && file.length() > 0;
-                
-                handler.post(() -> {
-                    startStopBtn.setEnabled(true);
-                    if (ok) {
-                        isActive = true;
-                        startStopBtn.setText("⏹ STOP PROXY");
-                        startStopBtn.setBackgroundResource(R.drawable.button_red);
-                        proxyStatusText.setText("🟢 Active - Config Injected");
-                        proxyStatusText.setTextColor(Color.parseColor("#00E676"));
-                        statusDot.setBackgroundResource(R.drawable.dot_green);
-                        Toast.makeText(this, "✅ Config Created Successfully!", Toast.LENGTH_SHORT).show();
-                    } else {
-                        startStopBtn.setText("▶ START PROXY");
-                        Toast.makeText(this, "❌ Failed! Enable Shizuku & try again.", Toast.LENGTH_LONG).show();
-                    }
-                });
-            } catch (Exception e) {
-                handler.post(() -> {
-                    startStopBtn.setEnabled(true);
-                    startStopBtn.setText("▶ START PROXY");
-                    Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                });
+        executor.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    String serverUrl = "http://203.175.125.151:10136/" + jwtToken + "/";
+                    
+                    JSONObject config = new JSONObject();
+                    config.put("verAddr", "https://version-ggbluellama.vercel.app/live/");
+                    config.put("serverLoginUrl", serverUrl);
+                    
+                    File file = new File(CONFIG_PATH);
+                    File parent = file.getParentFile();
+                    if (parent != null && !parent.exists()) parent.mkdirs();
+                    if (file.exists()) file.delete();
+                    file.createNewFile();
+                    
+                    FileWriter fw = new FileWriter(file);
+                    fw.write(config.toString(2));
+                    fw.flush();
+                    fw.close();
+                    
+                    final boolean ok = file.exists() && file.length() > 0;
+                    
+                    handler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            startStopBtn.setEnabled(true);
+                            if (ok) {
+                                isActive = true;
+                                startStopBtn.setText("STOP PROXY");
+                                startStopBtn.setBackgroundResource(R.drawable.button_red);
+                                proxyStatusText.setText("Active - Config Injected");
+                                proxyStatusText.setTextColor(Color.parseColor("#00E676"));
+                                statusDot.setBackgroundResource(R.drawable.dot_green);
+                                Toast.makeText(DashboardActivity.this, "Config Created!", Toast.LENGTH_SHORT).show();
+                            } else {
+                                startStopBtn.setText("START PROXY");
+                                Toast.makeText(DashboardActivity.this, "Failed! Check Shizuku.", Toast.LENGTH_LONG).show();
+                            }
+                        }
+                    });
+                } catch (Exception e) {
+                    handler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            startStopBtn.setEnabled(true);
+                            startStopBtn.setText("START PROXY");
+                            Toast.makeText(DashboardActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                        }
+                    });
+                }
             }
         });
     }
 
     private void stopProxy() {
         startStopBtn.setEnabled(false);
-        startStopBtn.setText("⏳ Deleting...");
+        startStopBtn.setText("Deleting...");
         
-        executor.execute(() -> {
-            try {
-                File file = new File(CONFIG_PATH);
-                boolean ok = !file.exists() || file.delete();
-                
-                handler.post(() -> {
-                    startStopBtn.setEnabled(true);
-                    if (ok) {
-                        isActive = false;
-                        startStopBtn.setText("▶ START PROXY");
-                        startStopBtn.setBackgroundResource(R.drawable.button_green);
-                        proxyStatusText.setText("⚪ Not Active");
-                        proxyStatusText.setTextColor(Color.parseColor("#8892B0"));
-                        statusDot.setBackgroundResource(R.drawable.dot_red);
-                        Toast.makeText(this, "🗑 Config Deleted!", Toast.LENGTH_SHORT).show();
-                    }
-                });
-            } catch (Exception e) {
-                handler.post(() -> startStopBtn.setEnabled(true));
+        executor.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    File file = new File(CONFIG_PATH);
+                    final boolean ok = !file.exists() || file.delete();
+                    
+                    handler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            startStopBtn.setEnabled(true);
+                            if (ok) {
+                                isActive = false;
+                                startStopBtn.setText("START PROXY");
+                                startStopBtn.setBackgroundResource(R.drawable.button_green);
+                                proxyStatusText.setText("Not Active");
+                                proxyStatusText.setTextColor(Color.parseColor("#8892B0"));
+                                statusDot.setBackgroundResource(R.drawable.dot_red);
+                                Toast.makeText(DashboardActivity.this, "Config Deleted!", Toast.LENGTH_SHORT).show();
+                            }
+                        }
+                    });
+                } catch (Exception e) {
+                    handler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            startStopBtn.setEnabled(true);
+                        }
+                    });
+                }
             }
         });
     }
