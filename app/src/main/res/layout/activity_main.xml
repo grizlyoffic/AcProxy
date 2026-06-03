@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0A0E17">
+
+    <!-- LOCK SCREEN -->
+    <LinearLayout
+        android:id="@+id/lockScreen"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="40dp"
+        android:visibility="visible">
+
+        <!-- Text Logo -->
+        <TextView
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:text="AC"
+            android:textSize="48sp"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:background="@drawable/logo_circle" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="AC PROXY"
+            android:textSize="32sp"
+            android:textColor="#00E676"
+            android:textStyle="bold"
+            android:letterSpacing="0.15"
+            android:layout_marginTop="16dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Free Fire Token Injector"
+            android:textSize="13sp"
+            android:textColor="#8892B0"
+            android:layout_marginTop="4dp" />
+
+        <!-- Status Box -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="@drawable/card_bg"
+            android:padding="24dp"
+            android:layout_marginTop="40dp">
+
+            <TextView
+                android:id="@+id/lockIcon"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔒"
+                android:textSize="56sp" />
+
+            <TextView
+                android:id="@+id/lockStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="App Locked"
+                android:textSize="18sp"
+                android:textColor="#FF5252"
+                android:textStyle="bold"
+                android:layout_marginTop="12dp" />
+
+            <TextView
+                android:id="@+id/lockMsg"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Shizuku required to unlock"
+                android:textSize="12sp"
+                android:textColor="#8892B0"
+                android:layout_marginTop="8dp"
+                android:gravity="center" />
+
+            <Button
+                android:id="@+id/unlockBtn"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:text="UNLOCK WITH SHIZUKU"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textAllCaps="true"
+                android:background="@drawable/button_blue"
+                android:layout_marginTop="20dp"
+                android:stateListAnimator="@null" />
+
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="v1.0 | Android 8+"
+            android:textSize="10sp"
+            android:textColor="#4A5568"
+            android:layout_marginTop="32dp" />
+
+    </LinearLayout>
+
+    <!-- LOGIN SCREEN -->
+    <ScrollView
+        android:id="@+id/loginScreen"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="32dp"
+            android:gravity="center_horizontal"
+            android:layout_gravity="center">
+
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:text="AC"
+                android:textSize="34sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="@drawable/logo_circle"
+                android:layout_marginTop="32dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Welcome Back"
+                android:textSize="26sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:layout_marginTop="24dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Enter your password to continue"
+                android:textSize="13sp"
+                android:textColor="#8892B0"
+                android:layout_marginTop="6dp"
+                android:layout_marginBottom="32dp" />
+
+            <!-- Password Card -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="24dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🔑 Password"
+                    android:textSize="14sp"
+                    android:textColor="#CCD6F6"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="12dp" />
+
+                <EditText
+                    android:id="@+id/passwordInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="54dp"
+                    android:hint="Enter your token / password"
+                    android:textColor="#FFFFFF"
+                    android:textColorHint="#4A5568"
+                    android:textSize="14sp"
+                    android:inputType="textPassword"
+                    android:singleLine="true"
+                    android:paddingStart="18dp"
+                    android:paddingEnd="18dp"
+                    android:background="@drawable/edittext_bg" />
+
+                <Button
+                    android:id="@+id/verifyBtn"
+                    android:layout_width="match_parent"
+                    android:layout_height="54dp"
+                    android:text="VERIFY & LOGIN"
+                    android:textColor="#FFFFFF"
+                    android:textSize="15sp"
+                    android:textAllCaps="true"
+                    android:background="@drawable/button_green"
+                    android:layout_marginTop="20dp"
+                    android:stateListAnimator="@null" />
+
+                <TextView
+                    android:id="@+id/errorText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textSize="11sp"
+                    android:textColor="#FF5252"
+                    android:gravity="center"
+                    android:layout_marginTop="12dp"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+
+            <!-- Create Account -->
+            <TextView
+                android:id="@+id/createAccountBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="I don't have password? CREATE ACCOUNT"
+                android:textSize="12sp"
+                android:textColor="#0A84FF"
+                android:layout_marginTop="28dp"
+                android:padding="8dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackground" />
+
+        </LinearLayout>
+    </ScrollView>
+
+</FrameLayout>
