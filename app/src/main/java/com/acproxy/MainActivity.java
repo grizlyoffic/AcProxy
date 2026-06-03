@@ -23,7 +23,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import rikka.shizuku.Shizuku;
 import rikka.shizuku.ShizukuBinderWrapper;
-import rikka.shizuku.UserServiceArgs;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -43,6 +42,7 @@ public class MainActivity extends AppCompatActivity {
     private ExecutorService executor;
     private Handler handler;
     private SharedPreferences prefs;
+    private ServiceConnection serviceConnection;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -93,12 +93,12 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             
-            // FIXED: Use UserServiceArgs instead of Intent
-            UserServiceArgs args = new UserServiceArgs(
-                new ComponentName("com.acproxy", "com.acproxy.FileService")
-            );
+            // Unbind previous if exists
+            if (serviceConnection != null) {
+                try { Shizuku.unbindUserService(serviceConnection, false); } catch (Exception e) {}
+            }
             
-            Shizuku.bindUserService(args, new ServiceConnection() {
+            serviceConnection = new ServiceConnection() {
                 @Override
                 public void onServiceConnected(ComponentName name, IBinder service) {
                     fileService = IFileService.Stub.asInterface(new ShizukuBinderWrapper(service));
@@ -110,7 +110,13 @@ public class MainActivity extends AppCompatActivity {
                     fileService = null;
                     shizukuReady = false;
                 }
-            });
+            };
+            
+            // Direct bind with ComponentName
+            Shizuku.bindUserService(
+                new ComponentName("com.acproxy", "com.acproxy.FileService"),
+                serviceConnection
+            );
             
         } catch (Exception e) {
             updateLockUI("Error", e.getMessage());
@@ -191,5 +197,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         executor.shutdown();
+        if (serviceConnection != null) {
+            try { Shizuku.unbindUserService(serviceConnection, false); } catch (Exception e) {}
+        }
     }
-                    }
+}
