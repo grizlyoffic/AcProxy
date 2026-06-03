@@ -1,14 +1,11 @@
 package com.acproxy;
 
-import android.content.ComponentName;
 import android.content.Intent;
-import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.IBinder;
 import android.os.Looper;
 import android.view.View;
 import android.widget.Button;
@@ -16,10 +13,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import org.json.JSONObject;
+import java.io.File;
+import java.io.FileWriter;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import rikka.shizuku.Shizuku;
-import rikka.shizuku.ShizukuBinderWrapper;
 
 public class DashboardActivity extends AppCompatActivity {
 
@@ -31,15 +29,12 @@ public class DashboardActivity extends AppCompatActivity {
     private Button startStopBtn;
     private Button logoutBtn;
     
-    private IFileService fileService;
     private String jwtToken = "";
     private boolean isActive = false;
-    private boolean shizukuReady = false;
     
     private ExecutorService executor;
     private Handler handler;
     private SharedPreferences prefs;
-    private ServiceConnection serviceConnection;
     
     private static final String CONFIG_PATH = "/storage/emulated/0/Android/data/com.dts.freefireth/files/localconfig.json";
 
@@ -56,7 +51,7 @@ public class DashboardActivity extends AppCompatActivity {
         if (jwtToken == null) jwtToken = prefs.getString("jwt_token", "");
         
         initViews();
-        bindShizukuService();
+        checkShizukuStatus();
     }
 
     private void initViews() {
@@ -77,7 +72,7 @@ public class DashboardActivity extends AppCompatActivity {
         tokenPreview.setText(preview);
         
         startStopBtn.setOnClickListener(v -> {
-            if (!shizukuReady) {
+            if (!Shizuku.pingBinder()) {
                 Toast.makeText(this, "Shizuku not connected!", Toast.LENGTH_SHORT).show();
                 return;
             }
@@ -93,31 +88,16 @@ public class DashboardActivity extends AppCompatActivity {
         });
     }
 
-    private void bindShizukuService() {
+    private void checkShizukuStatus() {
         try {
-            serviceConnection = new ServiceConnection() {
-                @Override
-                public void onServiceConnected(ComponentName name, IBinder service) {
-                    fileService = IFileService.Stub.asInterface(new ShizukuBinderWrapper(service));
-                    shizukuReady = true;
-                    shizukuStatus.setText("Shizuku: ✅ Connected");
-                    shizukuStatus.setTextColor(Color.parseColor("#00E676"));
-                }
-                @Override
-                public void onServiceDisconnected(ComponentName name) {
-                    fileService = null;
-                    shizukuReady = false;
-                    shizukuStatus.setText("Shizuku: ❌ Disconnected");
-                    shizukuStatus.setTextColor(Color.parseColor("#FF5252"));
-                }
-            };
-            
-            // Direct bind with ComponentName
-            Shizuku.bindUserService(
-                new ComponentName("com.acproxy", "com.acproxy.FileService"),
-                serviceConnection
-            );
-            
+            if (Shizuku.pingBinder() && 
+                Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                shizukuStatus.setText("Shizuku: ✅ Connected");
+                shizukuStatus.setTextColor(Color.parseColor("#00E676"));
+            } else {
+                shizukuStatus.setText("Shizuku: ❌ Not Connected");
+                shizukuStatus.setTextColor(Color.parseColor("#FF5252"));
+            }
         } catch (Exception e) {
             shizukuStatus.setText("Shizuku: ❌ Error");
             shizukuStatus.setTextColor(Color.parseColor("#FF5252"));
@@ -125,11 +105,6 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     private void startProxy() {
-        if (fileService == null) {
-            Toast.makeText(this, "Shizuku not ready!", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        
         startStopBtn.setEnabled(false);
         startStopBtn.setText("Creating...");
         
@@ -141,7 +116,19 @@ public class DashboardActivity extends AppCompatActivity {
                 config.put("verAddr", "https://version-ggbluellama.vercel.app/live/");
                 config.put("serverLoginUrl", serverUrl);
                 
-                boolean ok = fileService.createFile(CONFIG_PATH, config.toString(2));
+                // Direct file write with Shizuku permission
+                File file = new File(CONFIG_PATH);
+                File parent = file.getParentFile();
+                if (parent != null && !parent.exists()) parent.mkdirs();
+                if (file.exists()) file.delete();
+                file.createNewFile();
+                
+                FileWriter fw = new FileWriter(file);
+                fw.write(config.toString(2));
+                fw.flush();
+                fw.close();
+                
+                boolean ok = file.exists() && file.length() > 0;
                 
                 handler.post(() -> {
                     startStopBtn.setEnabled(true);
@@ -155,26 +142,27 @@ public class DashboardActivity extends AppCompatActivity {
                         Toast.makeText(this, "✅ Config Created!", Toast.LENGTH_SHORT).show();
                     } else {
                         startStopBtn.setText("▶ START PROXY");
-                        Toast.makeText(this, "❌ Failed! Check permissions.", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "❌ Failed! Check Shizuku permissions.", Toast.LENGTH_LONG).show();
                     }
                 });
             } catch (Exception e) {
                 handler.post(() -> {
                     startStopBtn.setEnabled(true);
                     startStopBtn.setText("▶ START PROXY");
+                    Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
             }
         });
     }
 
     private void stopProxy() {
-        if (fileService == null) return;
-        
         startStopBtn.setEnabled(false);
         
         executor.execute(() -> {
             try {
-                boolean ok = fileService.deleteFile(CONFIG_PATH);
+                File file = new File(CONFIG_PATH);
+                boolean ok = !file.exists() || file.delete();
+                
                 handler.post(() -> {
                     startStopBtn.setEnabled(true);
                     if (ok) {
@@ -194,11 +182,14 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        checkShizukuStatus();
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
         executor.shutdown();
-        if (serviceConnection != null) {
-            try { Shizuku.unbindUserService(serviceConnection, false); } catch (Exception e) {}
-        }
     }
 }
