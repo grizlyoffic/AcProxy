@@ -1,15 +1,12 @@
 package com.acproxy;
 
-import android.content.ComponentName;
 import android.content.Intent;
-import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.IBinder;
 import android.os.Looper;
 import android.view.View;
 import android.widget.Button;
@@ -35,11 +32,31 @@ public class MainActivity extends AppCompatActivity {
     private TextView errorText;
     private TextView createAccountBtn;
     
-    private boolean shizukuReady = false;
     private String jwtToken = "";
     private ExecutorService executor;
     private Handler handler;
     private SharedPreferences prefs;
+    private boolean isDestroyed = false;
+
+    // Shizuku Listeners
+    private final Shizuku.OnBinderReceivedListener binderReceivedListener = () -> {
+        runOnUiThread(() -> checkAndUnlock());
+    };
+
+    private final Shizuku.OnBinderDeadListener binderDeadListener = () -> {
+        runOnUiThread(() -> showLockScreen("Shizuku Disconnected", "Service stopped"));
+    };
+
+    private final Shizuku.OnRequestPermissionResultListener permissionResultListener = 
+        (requestCode, grantResult) -> {
+            runOnUiThread(() -> {
+                if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                    checkAndUnlock();
+                } else {
+                    showLockScreen("Permission Denied", "Grant Shizuku permission to continue");
+                }
+            });
+        };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,7 +68,10 @@ public class MainActivity extends AppCompatActivity {
         prefs = getSharedPreferences("acproxy", MODE_PRIVATE);
         
         initViews();
-        handler.postDelayed(() -> checkShizuku(), 500);
+        setupShizukuListeners();
+        
+        // Check immediately
+        handler.post(() -> checkAndUnlock());
     }
 
     private void initViews() {
@@ -65,52 +85,91 @@ public class MainActivity extends AppCompatActivity {
         errorText = findViewById(R.id.errorText);
         createAccountBtn = findViewById(R.id.createAccountBtn);
         
-        unlockBtn.setOnClickListener(v -> checkShizuku());
+        unlockBtn.setOnClickListener(v -> {
+            try {
+                Shizuku.requestPermission(0);
+                Intent intent = getPackageManager().getLaunchIntentForPackage("moe.shizuku.privileged.api");
+                if (intent != null) startActivity(intent);
+                else Toast.makeText(this, "Shizuku app not installed!", Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Toast.makeText(this, "Open Shizuku app manually", Toast.LENGTH_SHORT).show();
+            }
+        });
+        
         verifyBtn.setOnClickListener(v -> verifyPassword());
         createAccountBtn.setOnClickListener(v -> {
             Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/YourBot"));
             startActivity(i);
         });
         
-        String saved = prefs.getString("saved_token", "");
-        if (!saved.isEmpty()) passwordInput.setText(saved);
-    }
-
-    private void checkShizuku() {
-        try {
-            if (!Shizuku.pingBinder()) {
-                updateLockUI("Shizuku Not Running", "Open Shizuku app and start service");
-                return;
-            }
-            
-            if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-                Shizuku.requestPermission(0);
-                updateLockUI("Grant Permission", "Allow Shizuku permission popup");
-                handler.postDelayed(() -> checkShizuku(), 1500);
-                return;
-            }
-            
-            // Shizuku ready - unlock
-            shizukuReady = true;
-            unlockApp();
-            
-        } catch (Exception e) {
-            updateLockUI("Error", e.getMessage());
+        // Check for saved session
+        String savedJwt = prefs.getString("jwt_token", "");
+        String savedPass = prefs.getString("saved_token", "");
+        if (!savedPass.isEmpty()) passwordInput.setText(savedPass);
+        
+        // Auto-login if already verified
+        if (!savedJwt.isEmpty() && Shizuku.pingBinder() && 
+            Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+            jwtToken = savedJwt;
+            goToDashboard();
+            return;
         }
     }
 
-    private void updateLockUI(String status, String msg) {
-        lockStatus.setText(status);
-        lockStatus.setTextColor(status.equals("Error") ? 
-            Color.parseColor("#FF5252") : Color.parseColor("#FFD740"));
-        lockMsg.setText(msg);
+    private void setupShizukuListeners() {
+        Shizuku.addBinderReceivedListener(binderReceivedListener);
+        Shizuku.addBinderDeadListener(binderDeadListener);
+        Shizuku.addRequestPermissionResultListener(permissionResultListener);
     }
 
-    private void unlockApp() {
-        lockScreen.setVisibility(View.GONE);
-        loginScreen.setVisibility(View.VISIBLE);
-        loginScreen.setAlpha(0f);
-        loginScreen.animate().alpha(1f).setDuration(500).start();
+    private void checkAndUnlock() {
+        if (isDestroyed) return;
+        
+        try {
+            boolean binderAlive = Shizuku.pingBinder();
+            
+            if (!binderAlive) {
+                showLockScreen("Shizuku Not Running", "Open Shizuku app and start the service");
+                return;
+            }
+            
+            int permission = Shizuku.checkSelfPermission();
+            
+            if (permission == PackageManager.PERMISSION_GRANTED) {
+                // Shizuku ready! Show login screen
+                lockScreen.setVisibility(View.GONE);
+                loginScreen.setVisibility(View.VISIBLE);
+                loginScreen.setAlpha(0f);
+                loginScreen.animate().alpha(1f).setDuration(400).start();
+                
+                // Check auto-login
+                String savedJwt = prefs.getString("jwt_token", "");
+                if (!savedJwt.isEmpty()) {
+                    jwtToken = savedJwt;
+                    handler.postDelayed(() -> goToDashboard(), 300);
+                }
+            } else {
+                // Need permission
+                Shizuku.requestPermission(0);
+                showLockScreen("Permission Required", "Tap button below to grant Shizuku permission");
+            }
+        } catch (Exception e) {
+            showLockScreen("Error", "Shizuku check failed");
+        }
+    }
+
+    private void showLockScreen(String status, String msg) {
+        lockScreen.setVisibility(View.VISIBLE);
+        loginScreen.setVisibility(View.GONE);
+        lockStatus.setText(status);
+        lockMsg.setText(msg);
+        
+        if (status.contains("Permission") || status.contains("Not Running")) {
+            lockStatus.setTextColor(Color.parseColor("#FFD740"));
+            unlockBtn.setVisibility(View.VISIBLE);
+        } else {
+            lockStatus.setTextColor(Color.parseColor("#FF5252"));
+        }
     }
 
     private void verifyPassword() {
@@ -142,11 +201,7 @@ public class MainActivity extends AppCompatActivity {
                                 jwtToken = jt;
                                 prefs.edit().putString("saved_token", pass).apply();
                                 prefs.edit().putString("jwt_token", jt).apply();
-                                
-                                Intent intent = new Intent(MainActivity.this, DashboardActivity.class);
-                                intent.putExtra("jwt_token", jt);
-                                startActivity(intent);
-                                finish();
+                                goToDashboard();
                             } else {
                                 errorText.setText("Invalid password!");
                                 errorText.setVisibility(View.VISIBLE);
@@ -169,9 +224,34 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void goToDashboard() {
+        Intent intent = new Intent(MainActivity.this, DashboardActivity.class);
+        intent.putExtra("jwt_token", jwtToken);
+        intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+        finish();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        isDestroyed = false;
+        // Re-check Shizuku when coming back
+        handler.postDelayed(() -> checkAndUnlock(), 300);
+    }
+
+    @Override
+    protected void onPause() 
+        super.onPause();
+        isDestroyed = true;
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
         executor.shutdown();
+        Shizuku.removeBinderReceivedListener(binderReceivedListener);
+        Shizuku.removeBinderDeadListener(binderDeadListener);
+        Shizuku.removeRequestPermissionResultListener(permissionResultListener);
     }
 }
