@@ -23,6 +23,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import rikka.shizuku.Shizuku;
 import rikka.shizuku.ShizukuBinderWrapper;
+import rikka.shizuku.UserServiceArgs;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -74,7 +75,6 @@ public class MainActivity extends AppCompatActivity {
             startActivity(i);
         });
         
-        // Restore saved token
         String saved = prefs.getString("saved_token", "");
         if (!saved.isEmpty()) passwordInput.setText(saved);
     }
@@ -93,10 +93,12 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             
-            // Bind UserService
-            Intent intent = new Intent();
-            intent.setComponent(new ComponentName("com.acproxy", "com.acproxy.FileService"));
-            Shizuku.bindUserService(intent, new ServiceConnection() {
+            // FIXED: Use UserServiceArgs instead of Intent
+            UserServiceArgs args = new UserServiceArgs(
+                new ComponentName("com.acproxy", "com.acproxy.FileService")
+            );
+            
+            Shizuku.bindUserService(args, new ServiceConnection() {
                 @Override
                 public void onServiceConnected(ComponentName name, IBinder service) {
                     fileService = IFileService.Stub.asInterface(new ShizukuBinderWrapper(service));
@@ -190,4 +192,4 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         executor.shutdown();
     }
-}
+                    }
