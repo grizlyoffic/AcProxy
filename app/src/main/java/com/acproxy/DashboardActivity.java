@@ -2,6 +2,7 @@ package com.acproxy;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
@@ -31,12 +32,21 @@ public class DashboardActivity extends AppCompatActivity {
     
     private String jwtToken = "";
     private boolean isActive = false;
+    private boolean isDestroyed = false;
     
     private ExecutorService executor;
     private Handler handler;
     private SharedPreferences prefs;
     
     private static final String CONFIG_PATH = "/storage/emulated/0/Android/data/com.dts.freefireth/files/localconfig.json";
+
+    private final Shizuku.OnBinderDeadListener binderDeadListener = () -> {
+        runOnUiThread(() -> updateShizukuStatus(false));
+    };
+
+    private final Shizuku.OnBinderReceivedListener binderReceivedListener = () -> {
+        runOnUiThread(() -> updateShizukuStatus(true));
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,7 +61,8 @@ public class DashboardActivity extends AppCompatActivity {
         if (jwtToken == null) jwtToken = prefs.getString("jwt_token", "");
         
         initViews();
-        checkShizukuStatus();
+        setupShizukuListeners();
+        updateShizukuStatus(Shizuku.pingBinder());
     }
 
     private void initViews() {
@@ -63,17 +74,18 @@ public class DashboardActivity extends AppCompatActivity {
         startStopBtn = findViewById(R.id.startStopBtn);
         logoutBtn = findViewById(R.id.logoutBtn);
         
-        deviceInfo.setText("Model: " + Build.MODEL + "\n" +
-                          "Manufacturer: " + Build.MANUFACTURER + "\n" +
-                          "Android: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\n" +
-                          "Brand: " + Build.BRAND);
+        deviceInfo.setText("📱 Model: " + Build.MODEL + "\n" +
+                          "🏭 Manufacturer: " + Build.MANUFACTURER + "\n" +
+                          "🤖 Android: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\n" +
+                          "🏷 Brand: " + Build.BRAND);
         
-        String preview = jwtToken.length() > 40 ? jwtToken.substring(0, 40) + "..." : jwtToken;
+        String preview = jwtToken.length() > 35 ? jwtToken.substring(0, 35) + "..." : jwtToken;
         tokenPreview.setText(preview);
         
         startStopBtn.setOnClickListener(v -> {
-            if (!Shizuku.pingBinder()) {
-                Toast.makeText(this, "Shizuku not connected!", Toast.LENGTH_SHORT).show();
+            if (!Shizuku.pingBinder() || 
+                Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "❌ Shizuku not connected!", Toast.LENGTH_SHORT).show();
                 return;
             }
             if (isActive) stopProxy();
@@ -83,30 +95,36 @@ public class DashboardActivity extends AppCompatActivity {
         logoutBtn.setOnClickListener(v -> {
             prefs.edit().clear().apply();
             if (isActive) stopProxy();
-            startActivity(new Intent(this, MainActivity.class));
+            Intent intent = new Intent(this, MainActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
             finish();
         });
     }
 
-    private void checkShizukuStatus() {
-        try {
-            if (Shizuku.pingBinder() && 
-                Shizuku.checkSelfPermission() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                shizukuStatus.setText("Shizuku: ✅ Connected");
-                shizukuStatus.setTextColor(Color.parseColor("#00E676"));
-            } else {
-                shizukuStatus.setText("Shizuku: ❌ Not Connected");
-                shizukuStatus.setTextColor(Color.parseColor("#FF5252"));
-            }
-        } catch (Exception e) {
-            shizukuStatus.setText("Shizuku: ❌ Error");
+    private void setupShizukuListeners() {
+        Shizuku.addBinderReceivedListener(binderReceivedListener);
+        Shizuku.addBinderDeadListener(binderDeadListener);
+    }
+
+    private void updateShizukuStatus(boolean connected) {
+        if (isDestroyed) return;
+        
+        if (connected && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+            shizukuStatus.setText("✅ Shizuku Connected");
+            shizukuStatus.setTextColor(Color.parseColor("#00E676"));
+        } else if (connected) {
+            shizukuStatus.setText("⚠️ Shizuku - Permission Needed");
+            shizukuStatus.setTextColor(Color.parseColor("#FFD740"));
+        } else {
+            shizukuStatus.setText("❌ Shizuku Disconnected");
             shizukuStatus.setTextColor(Color.parseColor("#FF5252"));
         }
     }
 
     private void startProxy() {
         startStopBtn.setEnabled(false);
-        startStopBtn.setText("Creating...");
+        startStopBtn.setText("⏳ Creating...");
         
         executor.execute(() -> {
             try {
@@ -116,7 +134,6 @@ public class DashboardActivity extends AppCompatActivity {
                 config.put("verAddr", "https://version-ggbluellama.vercel.app/live/");
                 config.put("serverLoginUrl", serverUrl);
                 
-                // Direct file write with Shizuku permission
                 File file = new File(CONFIG_PATH);
                 File parent = file.getParentFile();
                 if (parent != null && !parent.exists()) parent.mkdirs();
@@ -136,13 +153,13 @@ public class DashboardActivity extends AppCompatActivity {
                         isActive = true;
                         startStopBtn.setText("⏹ STOP PROXY");
                         startStopBtn.setBackgroundResource(R.drawable.button_red);
-                        proxyStatusText.setText("Active - Config Injected");
+                        proxyStatusText.setText("🟢 Active - Config Injected");
                         proxyStatusText.setTextColor(Color.parseColor("#00E676"));
                         statusDot.setBackgroundResource(R.drawable.dot_green);
-                        Toast.makeText(this, "✅ Config Created!", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "✅ Config Created Successfully!", Toast.LENGTH_SHORT).show();
                     } else {
                         startStopBtn.setText("▶ START PROXY");
-                        Toast.makeText(this, "❌ Failed! Check Shizuku permissions.", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "❌ Failed! Enable Shizuku & try again.", Toast.LENGTH_LONG).show();
                     }
                 });
             } catch (Exception e) {
@@ -157,6 +174,7 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void stopProxy() {
         startStopBtn.setEnabled(false);
+        startStopBtn.setText("⏳ Deleting...");
         
         executor.execute(() -> {
             try {
@@ -169,10 +187,10 @@ public class DashboardActivity extends AppCompatActivity {
                         isActive = false;
                         startStopBtn.setText("▶ START PROXY");
                         startStopBtn.setBackgroundResource(R.drawable.button_green);
-                        proxyStatusText.setText("Not Active");
+                        proxyStatusText.setText("⚪ Not Active");
                         proxyStatusText.setTextColor(Color.parseColor("#8892B0"));
                         statusDot.setBackgroundResource(R.drawable.dot_red);
-                        Toast.makeText(this, "Config Deleted!", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "🗑 Config Deleted!", Toast.LENGTH_SHORT).show();
                     }
                 });
             } catch (Exception e) {
@@ -184,12 +202,21 @@ public class DashboardActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        checkShizukuStatus();
+        isDestroyed = false;
+        updateShizukuStatus(Shizuku.pingBinder());
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        isDestroyed = true;
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         executor.shutdown();
+        Shizuku.removeBinderReceivedListener(binderReceivedListener);
+        Shizuku.removeBinderDeadListener(binderDeadListener);
     }
 }
