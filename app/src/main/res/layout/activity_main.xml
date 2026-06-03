@@ -184,7 +184,7 @@
                     android:id="@+id/verifyBtn"
                     android:layout_width="match_parent"
                     android:layout_height="54dp"
-                    android:text="VERIFY & LOGIN"
+                    android:text="VERIFY &amp; LOGIN"
                     android:textColor="#FFFFFF"
                     android:textSize="15sp"
                     android:textAllCaps="true"
