@@ -20,7 +20,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import rikka.shizuku.Shizuku;
 import rikka.shizuku.ShizukuBinderWrapper;
-import rikka.shizuku.UserServiceArgs;
 
 public class DashboardActivity extends AppCompatActivity {
 
@@ -40,6 +39,7 @@ public class DashboardActivity extends AppCompatActivity {
     private ExecutorService executor;
     private Handler handler;
     private SharedPreferences prefs;
+    private ServiceConnection serviceConnection;
     
     private static final String CONFIG_PATH = "/storage/emulated/0/Android/data/com.dts.freefireth/files/localconfig.json";
 
@@ -95,12 +95,7 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void bindShizukuService() {
         try {
-            // FIXED: Use UserServiceArgs instead of Intent
-            UserServiceArgs args = new UserServiceArgs(
-                new ComponentName("com.acproxy", "com.acproxy.FileService")
-            );
-            
-            Shizuku.bindUserService(args, new ServiceConnection() {
+            serviceConnection = new ServiceConnection() {
                 @Override
                 public void onServiceConnected(ComponentName name, IBinder service) {
                     fileService = IFileService.Stub.asInterface(new ShizukuBinderWrapper(service));
@@ -115,7 +110,14 @@ public class DashboardActivity extends AppCompatActivity {
                     shizukuStatus.setText("Shizuku: ❌ Disconnected");
                     shizukuStatus.setTextColor(Color.parseColor("#FF5252"));
                 }
-            });
+            };
+            
+            // Direct bind with ComponentName
+            Shizuku.bindUserService(
+                new ComponentName("com.acproxy", "com.acproxy.FileService"),
+                serviceConnection
+            );
+            
         } catch (Exception e) {
             shizukuStatus.setText("Shizuku: ❌ Error");
             shizukuStatus.setTextColor(Color.parseColor("#FF5252"));
@@ -195,5 +197,8 @@ public class DashboardActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         executor.shutdown();
+        if (serviceConnection != null) {
+            try { Shizuku.unbindUserService(serviceConnection, false); } catch (Exception e) {}
+        }
     }
 }
