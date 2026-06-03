@@ -93,9 +93,9 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             
-            // Unbind previous if exists
+            // Unbind previous
             if (serviceConnection != null) {
-                try { Shizuku.unbindUserService(serviceConnection, false); } catch (Exception e) {}
+                try { Shizuku.unbindUserService(serviceConnection, true); } catch (Exception e) {}
             }
             
             serviceConnection = new ServiceConnection() {
@@ -112,11 +112,10 @@ public class MainActivity extends AppCompatActivity {
                 }
             };
             
-            // Direct bind with ComponentName
-            Shizuku.bindUserService(
-                new ComponentName("com.acproxy", "com.acproxy.FileService"),
-                serviceConnection
-            );
+            // Use Intent method (old API)
+            Intent serviceIntent = new Intent();
+            serviceIntent.setComponent(new ComponentName("com.acproxy", "com.acproxy.FileService"));
+            Shizuku.bindUserService(serviceIntent, serviceConnection);
             
         } catch (Exception e) {
             updateLockUI("Error", e.getMessage());
@@ -198,7 +197,7 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         executor.shutdown();
         if (serviceConnection != null) {
-            try { Shizuku.unbindUserService(serviceConnection, false); } catch (Exception e) {}
+            try { Shizuku.unbindUserService(serviceConnection, true); } catch (Exception e) {}
         }
     }
-}
+                                                           }
